@@ -1625,7 +1625,7 @@ bool OpenGLWindowPixmap::bind()
 {
     if (!m_texture->isNull()) {
         if (needsPixmapUpdate(this)) {
-            m_texture->updateFromPixmap(this);
+            m_texture->updateFromPixmap(this, toplevel->damage());
             // mipmaps need to be updated
             m_texture->setDirty();
         }
