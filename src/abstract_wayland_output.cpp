@@ -80,8 +80,10 @@ void AbstractWaylandOutput::setGlobalPos(const QPoint &pos)
 {
     m_waylandOutputDevice->setGlobalPosition(pos);
 
-    m_waylandOutput->setGlobalPosition(pos);
+    // zxdg_output_v1.done is deprecated in version 3 and being replaced by wl_output.done.
+    // Ensure we update zxdg_output before wayland output.
     m_xdgOutputV1->setLogicalPosition(pos);
+    m_waylandOutput->setGlobalPosition(pos);
     m_xdgOutputV1->done();
 }
 
@@ -125,8 +127,11 @@ void AbstractWaylandOutput::setScale(qreal scale)
     // I don't know whether we want to round or ceil
     // or maybe even set this to 3 when we're scaling to 1.5
     // don't treat this like it's chosen deliberately
-    m_waylandOutput->setScale(std::ceil(scale));
+
+    // zxdg_output_v1.done is deprecated in version 3 and being replaced by wl_output.done.
+    // Ensure we update zxdg_output before wayland output.
     m_xdgOutputV1->setLogicalSize(pixelSize() / scale);
+    m_waylandOutput->setScale(std::ceil(scale));
     m_xdgOutputV1->done();
 }
 
@@ -161,8 +166,10 @@ void AbstractWaylandOutput::setTransform(DeviceInterface::Transform transform)
 {
     m_waylandOutputDevice->setTransform(transform);
 
-    m_waylandOutput->setTransform(toOutputTransform(transform));
+    // zxdg_output_v1.done is deprecated in version 3 and being replaced by wl_output.done.
+    // Ensure we update zxdg_output before wayland output.
     m_xdgOutputV1->setLogicalSize(pixelSize() / scale());
+    m_waylandOutput->setTransform(toOutputTransform(transform));
     m_xdgOutputV1->done();
 }
 
@@ -252,9 +259,11 @@ QString AbstractWaylandOutput::description() const
 
 void AbstractWaylandOutput::setWaylandMode(const QSize &size, int refreshRate)
 {
+    // zxdg_output_v1.done is deprecated in version 3 and being replaced by wl_output.done.
+    // Ensure we update zxdg_output before wayland output.
+    m_xdgOutputV1->setLogicalSize(pixelSize() / scale());
     m_waylandOutput->setCurrentMode(size, refreshRate);
     m_waylandOutputDevice->setCurrentMode(size, refreshRate);
-    m_xdgOutputV1->setLogicalSize(pixelSize() / scale());
     m_xdgOutputV1->done();
 }
 
@@ -296,10 +305,10 @@ void AbstractWaylandOutput::initInterfaces(const QString &model, const QString &
 
     // start off enabled
 
-    m_waylandOutput->create();
     m_xdgOutputV1->setName(name());
     m_xdgOutputV1->setDescription(description());
     m_xdgOutputV1->setLogicalSize(pixelSize() / scale());
+    m_waylandOutput->create();
     m_xdgOutputV1->done();
 }
 
