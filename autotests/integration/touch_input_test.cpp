@@ -59,7 +59,7 @@ void TouchInputTest::initTestCase()
     QCOMPARE(screens()->count(), 2);
     QCOMPARE(screens()->geometry(0), QRect(0, 0, 1280, 1024));
     QCOMPARE(screens()->geometry(1), QRect(1280, 0, 1280, 1024));
-    waylandServer()->initWorkspace();
+    Test::initWaylandWorkspace();
 }
 
 void TouchInputTest::init()
@@ -94,7 +94,7 @@ AbstractClient *TouchInputTest::showWindow(bool decorated)
 
     Surface *surface = Test::createSurface(Test::waylandCompositor());
     VERIFY(surface);
-    XdgShellSurface *shellSurface = Test::createXdgShellStableSurface(surface, surface);
+    Test::XdgToplevel *shellSurface = Test::createXdgToplevelSurface(surface, surface);
     VERIFY(shellSurface);
     if (decorated) {
         auto deco = Test::waylandServerSideDecoration()->create(surface, surface);
@@ -233,10 +233,6 @@ void TouchInputTest::testCancel()
     kwinApp()->platform()->touchCancel();
     QVERIFY(cancelSpy.wait());
     QCOMPARE(cancelSpy.count(), 1);
-
-    kwinApp()->platform()->touchUp(1, timestamp++);
-    QVERIFY(!pointRemovedSpy.wait(100));
-    QCOMPARE(pointRemovedSpy.count(), 0);
 }
 
 void TouchInputTest::testTouchMouseAction()
@@ -279,8 +275,6 @@ void TouchInputTest::testTouchPointCount()
     kwinApp()->platform()->touchUp(1, timestamp++);
     QCOMPARE(kwinApp()->platform()->touchPointCount(), 2);
 
-    kwinApp()->platform()->cancelTouchSequence();
-    QCOMPARE(kwinApp()->platform()->touchPointCount(), 1);
     kwinApp()->platform()->cancelTouchSequence();
     QCOMPARE(kwinApp()->platform()->touchPointCount(), 0);
 }

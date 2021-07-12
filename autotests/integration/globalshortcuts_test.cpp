@@ -18,6 +18,7 @@
 #include "workspace.h"
 
 #include <KWayland/Client/surface.h>
+#include <KWaylandServer/keyboard_interface.h>
 #include <KWaylandServer/seat_interface.h>
 
 #include <KGlobalAccel>
@@ -39,6 +40,8 @@ private Q_SLOTS:
     void init();
     void cleanup();
 
+    void testNonLatinLayout_data();
+    void testNonLatinLayout();
     void testConsumedShift();
     void testRepeatedTrigger();
     void testUserActionsMenu();
@@ -61,10 +64,11 @@ void GlobalShortcutsTest::initTestCase()
     kwinApp()->setConfig(KSharedConfig::openConfig(QString(), KConfig::SimpleConfig));
     qputenv("KWIN_XKB_DEFAULT_KEYMAP", "1");
     qputenv("XKB_DEFAULT_RULES", "evdev");
+    qputenv("XKB_DEFAULT_LAYOUT", "us,ru");
 
     kwinApp()->start();
     QVERIFY(applicationStartedSpy.wait());
-    waylandServer()->initWorkspace();
+    Test::initWaylandWorkspace();
 }
 
 void GlobalShortcutsTest::init()
@@ -72,11 +76,92 @@ void GlobalShortcutsTest::init()
     QVERIFY(Test::setupWaylandConnection());
     screens()->setCurrent(0);
     KWin::Cursors::self()->mouse()->setPos(QPoint(640, 512));
+
+    auto xkb = input()->keyboard()->xkb();
+    xkb->switchToLayout(0);
 }
 
 void GlobalShortcutsTest::cleanup()
 {
     Test::destroyWaylandConnection();
+}
+
+Q_DECLARE_METATYPE(Qt::Modifier)
+
+void GlobalShortcutsTest::testNonLatinLayout_data()
+{
+    QTest::addColumn<int>("modifierKey");
+    QTest::addColumn<Qt::Modifier>("qtModifier");
+    QTest::addColumn<int>("key");
+    QTest::addColumn<Qt::Key>("qtKey");
+
+    for (const auto &modifier :
+             QVector<QPair<int, Qt::Modifier>> {
+                {KEY_LEFTCTRL, Qt::CTRL},
+                {KEY_LEFTALT, Qt::ALT},
+                {KEY_LEFTSHIFT, Qt::SHIFT},
+                {KEY_LEFTMETA, Qt::META},
+             } )
+    {
+        for (const auto &key :
+             QVector<QPair<int, Qt::Key>> {
+
+                 // Tab is example of a key usually the same on different layouts, check it first
+                {KEY_TAB, Qt::Key_Tab},
+
+                 // Then check a key with a Latin letter.
+                 // The symbol will probably be differ on non-Latin layout.
+                 // On Russian layout, "w" key has a cyrillic letter "ц"
+                {KEY_W, Qt::Key_W},
+
+             #if QT_VERSION_MAJOR > 5	// since Qt 5 LTS is frozen
+                 // More common case with any Latin1 symbol keys, including punctuation, should work also.
+                 // "`" key has a "ё" letter on Russian layout
+                 // FIXME: QTBUG-90611
+                {KEY_GRAVE, Qt::Key_QuoteLeft},
+             #endif
+             } )
+        {
+            QTest::newRow(QKeySequence(modifier.second + key.second).toString().toLatin1().constData())
+                            << modifier.first << modifier.second << key.first << key.second;
+        }
+    }
+}
+
+void GlobalShortcutsTest::testNonLatinLayout()
+{
+    // Shortcuts on non-Latin layouts should still work, see BUG 375518
+    auto xkb = input()->keyboard()->xkb();
+    xkb->switchToLayout(1);
+    QCOMPARE(xkb->layoutName(), QStringLiteral("Russian"));
+
+    QFETCH(int, modifierKey);
+    QFETCH(Qt::Modifier, qtModifier);
+    QFETCH(int, key);
+    QFETCH(Qt::Key, qtKey);
+
+    const QKeySequence seq(qtModifier + qtKey);
+
+    QScopedPointer<QAction> action(new QAction(nullptr));
+    action->setProperty("componentName", QStringLiteral(KWIN_NAME));
+    action->setObjectName("globalshortcuts-test-non-latin-layout");
+
+    QSignalSpy triggeredSpy(action.data(), &QAction::triggered);
+    QVERIFY(triggeredSpy.isValid());
+
+    KGlobalAccel::self()->stealShortcutSystemwide(seq);
+    KGlobalAccel::self()->setShortcut(action.data(), {seq}, KGlobalAccel::NoAutoloading);
+    input()->registerShortcut(seq, action.data());
+
+    quint32 timestamp = 0;
+    kwinApp()->platform()->keyboardKeyPressed(modifierKey, timestamp++);
+    QCOMPARE(input()->keyboardModifiers(), qtModifier);
+    kwinApp()->platform()->keyboardKeyPressed(key, timestamp++);
+
+    kwinApp()->platform()->keyboardKeyReleased(key, timestamp++);
+    kwinApp()->platform()->keyboardKeyReleased(modifierKey, timestamp++);
+
+    QTRY_COMPARE_WITH_TIMEOUT(triggeredSpy.count(), 1, 100);
 }
 
 void GlobalShortcutsTest::testConsumedShift()
@@ -131,10 +216,10 @@ void GlobalShortcutsTest::testRepeatedTrigger()
     QVERIFY(triggeredSpy.wait());
     // now release the key
     kwinApp()->platform()->keyboardKeyReleased(KEY_5, timestamp++);
-    QVERIFY(!triggeredSpy.wait(500));
+    QVERIFY(!triggeredSpy.wait(50));
 
     kwinApp()->platform()->keyboardKeyReleased(KEY_WAKEUP, timestamp++);
-    QVERIFY(!triggeredSpy.wait(500));
+    QVERIFY(!triggeredSpy.wait(50));
 
     // release shift
     kwinApp()->platform()->keyboardKeyReleased(KEY_LEFTSHIFT, timestamp++);
@@ -152,7 +237,7 @@ void GlobalShortcutsTest::testUserActionsMenu()
 
     // first create a window
     QScopedPointer<Surface> surface(Test::createSurface());
-    QScopedPointer<XdgShellSurface> shellSurface(Test::createXdgShellStableSurface(surface.data()));
+    QScopedPointer<Test::XdgToplevel> shellSurface(Test::createXdgToplevelSurface(surface.data()));
     auto c = Test::renderAndWaitForShown(surface.data(), QSize(100, 50), Qt::blue);
     QVERIFY(c);
     QVERIFY(c->isActive());
@@ -221,6 +306,9 @@ struct XcbConnectionDeleter
 
 void GlobalShortcutsTest::testX11ClientShortcut()
 {
+#ifdef NO_XWAYLAND
+    QSKIP("x11 test, unnecessary without xwayland");
+#endif
     // create an X11 window
     QScopedPointer<xcb_connection_t, XcbConnectionDeleter> c(xcb_connect(nullptr, nullptr));
     QVERIFY(!xcb_connection_has_error(c.data()));
@@ -291,7 +379,7 @@ void GlobalShortcutsTest::testX11ClientShortcut()
 void GlobalShortcutsTest::testWaylandClientShortcut()
 {
     QScopedPointer<Surface> surface(Test::createSurface());
-    QScopedPointer<XdgShellSurface> shellSurface(Test::createXdgShellStableSurface(surface.data()));
+    QScopedPointer<Test::XdgToplevel> shellSurface(Test::createXdgToplevelSurface(surface.data()));
     auto client = Test::renderAndWaitForShown(surface.data(), QSize(100, 50), Qt::blue);
 
     QCOMPARE(workspace()->activeClient(), client);
@@ -321,13 +409,15 @@ void GlobalShortcutsTest::testWaylandClientShortcut()
     shellSurface.reset();
     surface.reset();
     QVERIFY(Test::waitForWindowDestroyed(client));
-    QVERIFY(workspace()->shortcutAvailable(seq));
+    QTRY_VERIFY_WITH_TIMEOUT(workspace()->shortcutAvailable(seq), 500); //we need the try since KGlobalAccelPrivate::unregister is async
 }
 
 void GlobalShortcutsTest::testSetupWindowShortcut()
 {
+    // QTBUG-62102
+
     QScopedPointer<Surface> surface(Test::createSurface());
-    QScopedPointer<XdgShellSurface> shellSurface(Test::createXdgShellStableSurface(surface.data()));
+    QScopedPointer<Test::XdgToplevel> shellSurface(Test::createXdgToplevelSurface(surface.data()));
     auto client = Test::renderAndWaitForShown(surface.data(), QSize(100, 50), Qt::blue);
 
     QCOMPARE(workspace()->activeClient(), client);

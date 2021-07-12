@@ -56,7 +56,7 @@ void MinimizeAllScriptTest::initTestCase()
     QCOMPARE(screens()->count(), 2);
     QCOMPARE(screens()->geometry(0), QRect(0, 0, 1280, 1024));
     QCOMPARE(screens()->geometry(1), QRect(1280, 0, 1280, 1024));
-    waylandServer()->initWorkspace();
+    Test::initWaylandWorkspace();
 }
 
 static QString locateMainScript(const QString &pluginName)
@@ -109,14 +109,14 @@ void MinimizeAllScriptTest::testMinimizeUnminimize()
 
     // Create a couple of test clients.
     QScopedPointer<Surface> surface1(Test::createSurface());
-    QScopedPointer<XdgShellSurface> shellSurface1(Test::createXdgShellStableSurface(surface1.data()));
+    QScopedPointer<Test::XdgToplevel> shellSurface1(Test::createXdgToplevelSurface(surface1.data()));
     AbstractClient *client1 = Test::renderAndWaitForShown(surface1.data(), QSize(100, 50), Qt::blue);
     QVERIFY(client1);
     QVERIFY(client1->isActive());
     QVERIFY(client1->isMinimizable());
 
     QScopedPointer<Surface> surface2(Test::createSurface());
-    QScopedPointer<XdgShellSurface> shellSurface2(Test::createXdgShellStableSurface(surface2.data()));
+    QScopedPointer<Test::XdgToplevel> shellSurface2(Test::createXdgToplevelSurface(surface2.data()));
     AbstractClient *client2 = Test::renderAndWaitForShown(surface2.data(), QSize(100, 50), Qt::red);
     QVERIFY(client2);
     QVERIFY(client2->isActive());

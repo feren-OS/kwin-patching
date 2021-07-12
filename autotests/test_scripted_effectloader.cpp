@@ -6,13 +6,13 @@
 
     SPDX-License-Identifier: GPL-2.0-or-later
 */
-#include "../effectloader.h"
+#include "effectloader.h"
 #include "mock_effectshandler.h"
-#include "../scripting/scriptedeffect.h"
+#include "scripting/scriptedeffect.h"
 // for mocking
-#include "../cursor.h"
-#include "../input.h"
-#include "../screenedge.h"
+#include "cursor.h"
+#include "input.h"
+#include "screenedge.h"
 // KDE
 #include <KConfig>
 #include <KConfigGroup>
@@ -35,6 +35,10 @@ void ScreenEdges::reserve(ElectricBorder, QObject *, const char *)
 {
 }
 
+void ScreenEdges::unreserve(ElectricBorder, QObject *)
+{
+}
+
 void ScreenEdges::reserveTouch(ElectricBorder, QAction *)
 {
 }
@@ -43,13 +47,6 @@ InputRedirection *InputRedirection::s_self = nullptr;
 
 void InputRedirection::registerShortcut(const QKeySequence &, QAction *)
 {
-}
-
-namespace MetaScripting
-{
-void registration(QScriptEngine *)
-{
-}
 }
 
 }

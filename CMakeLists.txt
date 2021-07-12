@@ -1,21 +1,19 @@
-cmake_minimum_required(VERSION 3.1 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.16)
 
-set(PROJECT_VERSION "5.21.5") # Handled by release scripts
+set(PROJECT_VERSION "5.22.3") # Handled by release scripts
 project(KWin VERSION ${PROJECT_VERSION})
 
 set(QT_MIN_VERSION "5.15.0")
-set(KF5_MIN_VERSION "5.78")
+set(KF5_MIN_VERSION "5.82")
 
-set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules ${CMAKE_MODULE_PATH})
-
-find_package(ECM 5.38 REQUIRED NO_MODULE)
+find_package(ECM ${KF5_MIN_VERSION} REQUIRED NO_MODULE)
 
 include(FeatureSummary)
 include(WriteBasicConfigVersionFile)
 include(GenerateExportHeader)
 
 # where to look first for cmake modules, before ${CMAKE_ROOT}/Modules/ is checked
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${ECM_MODULE_PATH} )
+set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules ${ECM_MODULE_PATH})
 
 find_package(Qt5 ${QT_MIN_VERSION} CONFIG REQUIRED COMPONENTS
     Concurrent
@@ -23,7 +21,6 @@ find_package(Qt5 ${QT_MIN_VERSION} CONFIG REQUIRED COMPONENTS
     DBus
     Quick
     QuickWidgets
-    Script
     UiTools
     Widgets
     X11Extras
@@ -47,6 +44,7 @@ include(KDEClangFormat)
 include(ECMInstallIcons)
 include(ECMOptionalAddSubdirectory)
 include(ECMConfiguredInstall)
+include(ECMQtDeclareLoggingCategory)
 
 add_definitions(-DQT_DISABLE_DEPRECATED_BEFORE=0 -DQT_USE_QSTRINGBUILDER -DQT_NO_URL_CAST_FROM_STRING -DQT_NO_CAST_TO_ASCII)
 
@@ -191,6 +189,8 @@ set_package_properties(XKB PROPERTIES
     PURPOSE "Required for building KWin with Wayland support"
 )
 
+find_package(Qt5XkbCommonSupport REQUIRED)
+
 find_package(Libinput 1.9)
 set_package_properties(Libinput PROPERTIES TYPE REQUIRED PURPOSE "Required for input handling on Wayland.")
 
@@ -294,6 +294,7 @@ set_package_properties(Xwayland PROPERTIES
     TYPE RUNTIME
     PURPOSE "Needed for running kwin_wayland"
 )
+set(HAVE_XWAYLAND_LISTENFD ${Xwayland_HAVE_LISTENFD})
 
 find_package(Libcap)
 set_package_properties(Libcap PROPERTIES
@@ -317,14 +318,6 @@ set_package_properties(QAccessibilityClient PROPERTIES
     PURPOSE "Required to enable accessibility features"
 )
 set(HAVE_ACCESSIBILITY ${QAccessibilityClient_FOUND})
-
-if(CMAKE_SYSTEM MATCHES "FreeBSD")
-    find_package(epoll)
-    set_package_properties(epoll PROPERTIES DESCRIPTION "I/O event notification facility"
-        TYPE REQUIRED
-        PURPOSE "Needed for running kwin_wayland"
-    )
-endif()
 
 include(ECMQMLModules)
 ecm_find_qmlmodule(QtQuick 2.3)
@@ -361,8 +354,6 @@ include_directories(${XKB_INCLUDE_DIR})
 
 set(HAVE_EPOXY_GLX ${epoxy_HAS_GLX})
 
-# for things that are also used by kwin libraries
-configure_file(libkwineffects/kwinconfig.h.cmake ${CMAKE_CURRENT_BINARY_DIR}/libkwineffects/kwinconfig.h )
 # for kwin internal things
 set(HAVE_X11_XCB ${X11_XCB_FOUND})
 
@@ -404,385 +395,24 @@ add_feature_info("SCHED_RESET_ON_FORK"
 pkg_check_modules(PipeWire IMPORTED_TARGET libpipewire-0.3)
 add_feature_info(PipeWire PipeWire_FOUND "Required for Wayland screencasting")
 
-configure_file(config-kwin.h.cmake ${CMAKE_CURRENT_BINARY_DIR}/config-kwin.h)
-
 ########### global ###############
-set(kwin_effects_dbus_xml ${CMAKE_CURRENT_SOURCE_DIR}/org.kde.kwin.Effects.xml)
-qt5_add_dbus_interface(effects_interface_SRCS ${kwin_effects_dbus_xml} kwineffects_interface)
-add_library(KWinEffectsInterface STATIC ${effects_interface_SRCS})
-target_link_libraries(KWinEffectsInterface Qt5::DBus)
 
 include_directories(BEFORE
-    ${CMAKE_CURRENT_BINARY_DIR}/libkwineffects
-    ${CMAKE_CURRENT_BINARY_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/libkwineffects
-    ${CMAKE_CURRENT_SOURCE_DIR}/effects
-    ${CMAKE_CURRENT_SOURCE_DIR}/tabbox
-    ${CMAKE_CURRENT_SOURCE_DIR}/platformsupport
+    ${CMAKE_CURRENT_BINARY_DIR}/src/libkwineffects
+    ${CMAKE_CURRENT_BINARY_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/libkwineffects
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/effects
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/tabbox
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/platformsupport
 )
 
-add_subdirectory(libkwineffects)
-if (KWIN_BUILD_KCMS)
-    add_subdirectory(kcmkwin)
+if (KF5DocTools_FOUND)
+    add_subdirectory(doc)
 endif()
 
 add_subdirectory(data)
-
-add_subdirectory(effects)
-add_subdirectory(scripts)
-add_subdirectory(tabbox)
-add_subdirectory(scripting)
-add_subdirectory(helpers)
-
-########### next target ###############
-
-set(kwin_SRCS
-    3rdparty/xcursor.c
-    abstract_client.cpp
-    abstract_opengl_context_attribute_builder.cpp
-    abstract_output.cpp
-    abstract_wayland_output.cpp
-    activation.cpp
-    appmenu.cpp
-    atoms.cpp
-    client_machine.cpp
-    composite.cpp
-    cursor.cpp
-    dbusinterface.cpp
-    debug_console.cpp
-    decorations/decoratedclient.cpp
-    decorations/decorationbridge.cpp
-    decorations/decorationpalette.cpp
-    decorations/decorationrenderer.cpp
-    decorations/decorations_logging.cpp
-    decorations/settings.cpp
-    deleted.cpp
-    dmabuftexture.cpp
-    effectloader.cpp
-    effects.cpp
-    egl_context_attribute_builder.cpp
-    events.cpp
-    focuschain.cpp
-    ftrace.cpp
-    geometrytip.cpp
-    gestures.cpp
-    globalshortcuts.cpp
-    group.cpp
-    idle_inhibition.cpp
-    input.cpp
-    input_event.cpp
-    input_event_spy.cpp
-    inputmethod.cpp
-    inputpanelv1client.cpp
-    inputpanelv1integration.cpp
-    internal_client.cpp
-    keyboard_input.cpp
-    keyboard_layout.cpp
-    keyboard_layout_switching.cpp
-    keyboard_repeat.cpp
-    killwindow.cpp
-    layers.cpp
-    layershellv1client.cpp
-    layershellv1integration.cpp
-    libinput/connection.cpp
-    libinput/context.cpp
-    libinput/device.cpp
-    libinput/events.cpp
-    libinput/libinput_logging.cpp
-    linux_dmabuf.cpp
-    logind.cpp
-    main.cpp
-    modifier_only_shortcuts.cpp
-    moving_client_x11_filter.cpp
-    netinfo.cpp
-    onscreennotification.cpp
-    options.cpp
-    osd.cpp
-    outline.cpp
-    overlaywindow.cpp
-    placement.cpp
-    platform.cpp
-    plugin.cpp
-    pluginmanager.cpp
-    pointer_input.cpp
-    popup_input_filter.cpp
-    renderjournal.cpp
-    renderloop.cpp
-    rootinfo_filter.cpp
-    rulebooksettings.cpp
-    rules.cpp
-    scene.cpp
-    screenedge.cpp
-    screenlockerwatcher.cpp
-    screens.cpp
-    scripting/dbuscall.cpp
-    scripting/meta.cpp
-    scripting/screenedgeitem.cpp
-    scripting/scriptedeffect.cpp
-    scripting/scripting.cpp
-    scripting/scripting_logging.cpp
-    scripting/scripting_model.cpp
-    scripting/scriptingutils.cpp
-    scripting/timer.cpp
-    scripting/workspace_wrapper.cpp
-    shadow.cpp
-    sm.cpp
-    subsurfacemonitor.cpp
-    syncalarmx11filter.cpp
-    tablet_input.cpp
-    thumbnailitem.cpp
-    toplevel.cpp
-    touch_hide_cursor_spy.cpp
-    touch_input.cpp
-    udev.cpp
-    unmanaged.cpp
-    useractions.cpp
-    utils.cpp
-    virtualdesktops.cpp
-    virtualdesktopsdbustypes.cpp
-    virtualkeyboard_dbus.cpp
-    was_user_interaction_x11_filter.cpp
-    wayland_server.cpp
-    waylandclient.cpp
-    waylandshellintegration.cpp
-    window_property_notify_x11_filter.cpp
-    workspace.cpp
-    x11client.cpp
-    x11eventfilter.cpp
-    xcbutils.cpp
-    xcursortheme.cpp
-    xdgshellclient.cpp
-    xdgshellintegration.cpp
-    xkb.cpp
-    xwaylandclient.cpp
-    xwl/xwayland_interface.cpp
-)
-
-if (HAVE_LINUX_VT_H)
-    set(kwin_SRCS ${kwin_SRCS}
-        virtual_terminal.cpp
-    )
-    set(KWIN_TTY_PREFIX "/dev/tty")
-endif()
-
-if(CMAKE_SYSTEM MATCHES "FreeBSD")
-    # We know it has epoll, so supports VT as well
-    set(kwin_SRCS ${kwin_SRCS}
-        virtual_terminal.cpp
-    )
-    set(KWIN_TTY_PREFIX "/dev/ttyv")
-endif()
-if(KWIN_TTY_PREFIX)
-    set_source_files_properties(virtual_terminal.cpp PROPERTIES COMPILE_DEFINITIONS KWIN_TTY_PREFIX="${KWIN_TTY_PREFIX}")
-endif()    
-
-kconfig_add_kcfg_files(kwin_SRCS settings.kcfgc)
-kconfig_add_kcfg_files(kwin_SRCS rulesettings.kcfgc)
-kconfig_add_kcfg_files(kwin_SRCS rulebooksettingsbase.kcfgc)
-
-qt5_add_dbus_adaptor(kwin_SRCS org.kde.KWin.xml dbusinterface.h KWin::DBusInterface)
-qt5_add_dbus_adaptor(kwin_SRCS org.kde.kwin.Compositing.xml dbusinterface.h KWin::CompositorDBusInterface)
-qt5_add_dbus_adaptor(kwin_SRCS ${kwin_effects_dbus_xml} effects.h KWin::EffectsHandlerImpl)
-qt5_add_dbus_adaptor(kwin_SRCS org.kde.KWin.VirtualDesktopManager.xml dbusinterface.h KWin::VirtualDesktopManagerDBusInterface)
-qt5_add_dbus_adaptor(kwin_SRCS org.kde.KWin.Session.xml sm.h KWin::SessionManager)
-qt5_add_dbus_adaptor(kwin_SRCS org.kde.KWin.Plugins.xml dbusinterface.h KWin::PluginManagerDBusInterface)
-
-qt5_add_dbus_interface(kwin_SRCS ${KSCREENLOCKER_DBUS_INTERFACES_DIR}/kf5_org.freedesktop.ScreenSaver.xml screenlocker_interface)
-qt5_add_dbus_interface(kwin_SRCS ${KSCREENLOCKER_DBUS_INTERFACES_DIR}/org.kde.screensaver.xml kscreenlocker_interface)
-qt5_add_dbus_interface(kwin_SRCS org.kde.kappmenu.xml appmenu_interface)
-
-ki18n_wrap_ui(kwin_SRCS
-    debug_console.ui
-    shortcutdialog.ui
-)
-
-########### target link libraries ###############
-
-add_library(kwin SHARED ${kwin_SRCS})
-if (Libinput_VERSION_STRING VERSION_GREATER 1.14)
-    set_source_files_properties(libinput/connection.cpp PROPERTIES COMPILE_DEFINITIONS LIBINPUT_HAS_TOTEM)
-endif ()
-
-set_target_properties(kwin PROPERTIES
-   VERSION ${PROJECT_VERSION}
-   SOVERSION ${PROJECT_VERSION_MAJOR}
-)
-
-target_link_libraries(kwin
-    kwin4_effect_builtins
-    kwineffects
-    kwinglutils
-
-    Qt5::Concurrent
-    Qt5::DBus
-    Qt5::Quick
-    Qt5::Script
-
-    KF5::ConfigCore
-    KF5::ConfigWidgets
-    KF5::CoreAddons
-    KF5::GlobalAccel
-    KF5::GlobalAccelPrivate
-    KF5::I18n
-    KF5::Notifications
-    KF5::Package
-    KF5::Plasma
-    KF5::QuickAddons
-    KF5::WaylandClient
-    KF5::WindowSystem
-
-    KDecoration2::KDecoration
-    KDecoration2::KDecoration2Private
-
-    PW::KScreenLocker
-    Plasma::KWaylandServer
-
-    XCB::COMPOSITE
-    XCB::DAMAGE
-    XCB::GLX
-    XCB::ICCCM
-    XCB::KEYSYMS
-    XCB::RANDR
-    XCB::RENDER
-    XCB::SHAPE
-    XCB::SHM
-    XCB::SYNC
-    XCB::XCB
-    XCB::XFIXES
-
-    Libinput::Libinput
-    UDev::UDev
-    XKB::XKB
-    epoxy::epoxy
-
-    ${CMAKE_THREAD_LIBS_INIT}
-)
-
-if (KWIN_BUILD_CMS)
-    target_sources(kwin PRIVATE
-        colordevice.cpp
-        colormanager.cpp
-    )
-    target_link_libraries(kwin lcms2::lcms2)
-endif()
-
-if (KWIN_BUILD_ACTIVITIES)
-    target_sources(kwin PRIVATE activities.cpp)
-    target_link_libraries(kwin KF5::Activities)
-endif()
-
-if (KWIN_BUILD_TABBOX)
-    target_sources(kwin PRIVATE
-        tabbox/clientmodel.cpp
-        tabbox/desktopchain.cpp
-        tabbox/desktopmodel.cpp
-        tabbox/switcheritem.cpp
-        tabbox/tabbox.cpp
-        tabbox/tabbox_logging.cpp
-        tabbox/tabboxconfig.cpp
-        tabbox/tabboxhandler.cpp
-        tabbox/x11_filter.cpp
-    )
-    target_include_directories(kwin PRIVATE ${Qt5Gui_PRIVATE_INCLUDE_DIRS})
-endif()
-
-generate_export_header(kwin EXPORT_FILE_NAME kwin_export.h)
-
-if(CMAKE_SYSTEM MATCHES "FreeBSD")
-    # epoll is required, includes live under ${LOCALBASE}, separate library
-    target_include_directories(kwin PUBLIC ${epoll_INCLUDE_DIRS})
-    target_link_libraries(kwin ${epoll_LIBRARIES}) 
-endif()
-
-add_executable(kwin_x11 main_x11.cpp)
-target_link_libraries(kwin_x11 kwin KF5::Crash Qt5::X11Extras)
-
-install(TARGETS kwin ${INSTALL_TARGETS_DEFAULT_ARGS} LIBRARY NAMELINK_SKIP)
-install(TARGETS kwin_x11 ${INSTALL_TARGETS_DEFAULT_ARGS})
-
-set(kwin_XWAYLAND_SRCS
-   ${CMAKE_CURRENT_SOURCE_DIR}/xwl/clipboard.cpp
-   ${CMAKE_CURRENT_SOURCE_DIR}/xwl/databridge.cpp
-   ${CMAKE_CURRENT_SOURCE_DIR}/xwl/dnd.cpp
-   ${CMAKE_CURRENT_SOURCE_DIR}/xwl/drag.cpp
-   ${CMAKE_CURRENT_SOURCE_DIR}/xwl/drag_wl.cpp
-   ${CMAKE_CURRENT_SOURCE_DIR}/xwl/drag_x.cpp
-   ${CMAKE_CURRENT_SOURCE_DIR}/xwl/selection.cpp
-   ${CMAKE_CURRENT_SOURCE_DIR}/xwl/selection_source.cpp
-   ${CMAKE_CURRENT_SOURCE_DIR}/xwl/transfer.cpp
-   ${CMAKE_CURRENT_SOURCE_DIR}/xwl/xwayland.cpp
-)
-include(ECMQtDeclareLoggingCategory)
-ecm_qt_declare_logging_category(kwin_XWAYLAND_SRCS
-    HEADER
-        xwayland_logging.h
-    IDENTIFIER
-        KWIN_XWL
-    CATEGORY_NAME
-        kwin_xwl
-    DEFAULT_SEVERITY
-        Warning
-)
-
-set(kwin_WAYLAND_SRCS
-   main_wayland.cpp
-   tabletmodemanager.cpp
-)
-
-add_executable(kwin_wayland ${kwin_WAYLAND_SRCS} ${kwin_XWAYLAND_SRCS})
-target_link_libraries(kwin_wayland
-                      kwin
-                      KF5::Crash
-)
-if (HAVE_LIBCAP)
-    target_link_libraries(kwin_wayland ${Libcap_LIBRARIES})
-endif()
-
-install(TARGETS kwin_wayland ${INSTALL_TARGETS_DEFAULT_ARGS})
-if (HAVE_LIBCAP)
-    install(
-    CODE "execute_process(
-            COMMAND
-                ${SETCAP_EXECUTABLE}
-                CAP_SYS_NICE=+ep
-                \$ENV{DESTDIR}${CMAKE_INSTALL_FULL_BINDIR}/kwin_wayland)"
-    )
-endif()
-
-add_subdirectory(platformsupport)
-add_subdirectory(plugins)
-
-target_link_libraries(kwin_wayland
-    KWinQpaPlugin
-    KF5GlobalAccelKWinPlugin
-    KF5WindowSystemKWinPlugin
-    KF5IdleTimeKWinPlugin
-)
-
-if (PipeWire_FOUND)
-    target_link_libraries(kwin_wayland KWinScreencastPlugin)
-endif()
-
-########### install files ###############
-
-install(FILES kwin.kcfg DESTINATION ${KCFG_INSTALL_DIR} RENAME ${KWIN_NAME}.kcfg)
-install(FILES kwin.notifyrc DESTINATION ${KNOTIFYRC_INSTALL_DIR} RENAME ${KWIN_NAME}.notifyrc)
-install(
-    FILES
-        org.kde.KWin.VirtualDesktopManager.xml
-        org.kde.KWin.xml
-        org.kde.kwin.Compositing.xml
-        org.kde.kwin.Effects.xml
-        org.kde.KWin.Plugins.xml
-    DESTINATION
-        ${KDE_INSTALL_DBUSINTERFACEDIR}
-)
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/kwin_export.h DESTINATION ${INCLUDE_INSTALL_DIR} COMPONENT Devel)
-
-# Install the KWin/Script service type
-install(FILES scripting/kwinscript.desktop DESTINATION ${SERVICETYPES_INSTALL_DIR})
-
-add_subdirectory(qml)
+add_subdirectory(kconf_update)
+add_subdirectory(src)
 
 if (BUILD_TESTING)
     find_package(WaylandProtocols 1.19 REQUIRED)
@@ -793,12 +423,6 @@ if (BUILD_TESTING)
     add_subdirectory(tests)
 endif()
 
-if (KF5DocTools_FOUND)
-    add_subdirectory(doc)
-endif()
-
-add_subdirectory(kconf_update)
-
 # add clang-format target for all our real source files
 file(GLOB_RECURSE ALL_CLANG_FORMAT_SOURCE_FILES *.cpp *.h)
 kde_clang_format(${ALL_CLANG_FORMAT_SOURCE_FILES})
@@ -806,7 +430,7 @@ kde_clang_format(${ALL_CLANG_FORMAT_SOURCE_FILES})
 feature_summary(WHAT ALL INCLUDE_QUIET_PACKAGES FATAL_ON_MISSING_REQUIRED_PACKAGES)
 
 include(CMakePackageConfigHelpers)
-set(CMAKECONFIG_INSTALL_DIR "${CMAKECONFIG_INSTALL_PREFIX}/KWinDBusInterface")
+set(CMAKECONFIG_INSTALL_DIR "${KDE_INSTALL_CMAKEPACKAGEDIR}/KWinDBusInterface")
 configure_package_config_file(KWinDBusInterfaceConfig.cmake.in
     "${CMAKE_CURRENT_BINARY_DIR}/KWinDBusInterfaceConfig.cmake"
     PATH_VARS KDE_INSTALL_DBUSINTERFACEDIR

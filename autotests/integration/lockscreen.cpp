@@ -27,6 +27,7 @@
 #include <KWayland/Client/shm_pool.h>
 #include <KWayland/Client/surface.h>
 #include <KWayland/Client/touch.h>
+#include <KWaylandServer/keyboard_interface.h>
 #include <KWaylandServer/seat_interface.h>
 
 //screenlocker
@@ -155,7 +156,7 @@ AbstractClient *LockScreenTest::showWindow()
 
     Surface *surface = Test::createSurface(m_compositor);
     VERIFY(surface);
-    XdgShellSurface *shellSurface = Test::createXdgShellStableSurface(surface, surface);
+    Test::XdgToplevel *shellSurface = Test::createXdgToplevelSurface(surface, surface);
     VERIFY(shellSurface);
     // let's render
     auto c = Test::renderAndWaitForShown(surface, QSize(100, 50), Qt::blue);
@@ -185,7 +186,7 @@ void LockScreenTest::initTestCase()
     QCOMPARE(screens()->geometry(0), QRect(0, 0, 1280, 1024));
     QCOMPARE(screens()->geometry(1), QRect(1280, 0, 1280, 1024));
     setenv("QT_QPA_PLATFORM", "wayland", true);
-    waylandServer()->initWorkspace();
+    Test::initWaylandWorkspace();
 
     auto scene = KWin::Compositor::self()->scene();
     QVERIFY(scene);

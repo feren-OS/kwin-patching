@@ -189,7 +189,7 @@ void InternalWindowTest::initTestCase()
     QCOMPARE(screens()->count(), 2);
     QCOMPARE(screens()->geometry(0), QRect(0, 0, 1280, 1024));
     QCOMPARE(screens()->geometry(1), QRect(1280, 0, 1280, 1024));
-    waylandServer()->initWorkspace();
+    Test::initWaylandWorkspace();
 }
 
 void InternalWindowTest::init()
@@ -223,7 +223,7 @@ void InternalWindowTest::testEnterLeave()
     QCOMPARE(workspace()->findInternal(&win), c);
     QCOMPARE(c->frameGeometry(), QRect(0, 0, 100, 100));
     QVERIFY(c->isShown(false));
-    QVERIFY(workspace()->xStackingOrder().contains(c));
+    QVERIFY(workspace()->stackingOrder().contains(c));
 
     QSignalSpy enterSpy(&win, &HelperWindow::entered);
     QVERIFY(enterSpy.isValid());
@@ -378,7 +378,7 @@ void InternalWindowTest::testKeyboardTriggersLeave()
     QSignalSpy leftSpy(keyboard.data(), &Keyboard::left);
     QVERIFY(leftSpy.isValid());
     QScopedPointer<Surface> surface(Test::createSurface());
-    QScopedPointer<XdgShellSurface> shellSurface(Test::createXdgShellStableSurface(surface.data()));
+    QScopedPointer<Test::XdgToplevel> shellSurface(Test::createXdgToplevelSurface(surface.data()));
 
     // now let's render
     auto c = Test::renderAndWaitForShown(surface.data(), QSize(100, 50), Qt::blue);
@@ -837,11 +837,18 @@ void InternalWindowTest::testDismissPopup()
     auto serverPopup = clientAddedSpy.last().first().value<InternalClient *>();
     QVERIFY(serverPopup);
 
+    //Create the other window to click
+    HelperWindow otherClientToplevel;
+    otherClientToplevel.setGeometry(100, 100, 100, 100);
+    otherClientToplevel.show();
+    QTRY_COMPARE(clientAddedSpy.count(), 3);
+    auto serverOtherToplevel = clientAddedSpy.last().first().value<InternalClient *>();
+    QVERIFY(serverOtherToplevel);
+
     // Click somewhere outside the popup window.
     QSignalSpy popupClosedSpy(serverPopup, &InternalClient::windowClosed);
     quint32 timestamp = 0;
-    kwinApp()->platform()->pointerMotion(QPointF(serverPopup->x() + serverPopup->width() + 1,
-                                                 serverPopup->y() + serverPopup->height() + 1),
+    kwinApp()->platform()->pointerMotion(serverOtherToplevel->frameGeometry().center(),
                                          timestamp++);
     kwinApp()->platform()->pointerButtonPressed(BTN_LEFT, timestamp++);
     QTRY_COMPARE(popupClosedSpy.count(), 1);

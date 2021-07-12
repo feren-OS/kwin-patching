@@ -96,7 +96,7 @@ AbstractClient *DecorationInputTest::showWindow()
 
     Surface *surface = Test::createSurface(Test::waylandCompositor());
     VERIFY(surface);
-    XdgShellSurface *shellSurface = Test::createXdgShellStableSurface(surface, surface);
+    Test::XdgToplevel *shellSurface = Test::createXdgToplevelSurface(surface, surface);
     VERIFY(shellSurface);
     auto deco = Test::waylandServerSideDecoration()->create(surface, surface);
     QSignalSpy decoSpy(deco, &ServerSideDecoration::modeChanged);
@@ -141,7 +141,7 @@ void DecorationInputTest::initTestCase()
     QCOMPARE(screens()->geometry(0), QRect(0, 0, 1280, 1024));
     QCOMPARE(screens()->geometry(1), QRect(1280, 0, 1280, 1024));
     setenv("QT_QPA_PLATFORM", "wayland", true);
-    waylandServer()->initWorkspace();
+    Test::initWaylandWorkspace();
 }
 
 void DecorationInputTest::init()

@@ -66,7 +66,7 @@ void X11ClientTest::initTestCase()
     kwinApp()->start();
     QVERIFY(applicationStartedSpy.wait());
     QVERIFY(KWin::Compositor::self());
-    waylandServer()->initWorkspace();
+    Test::initWaylandWorkspace();
 }
 
 void X11ClientTest::init()
@@ -563,13 +563,13 @@ void X11ClientTest::testFullscreenLayerWithActiveWaylandWindow()
 
     // now let's open a Wayland window
     QScopedPointer<Surface> surface(Test::createSurface());
-    QScopedPointer<XdgShellSurface> shellSurface(Test::createXdgShellStableSurface(surface.data()));
+    QScopedPointer<Test::XdgToplevel> shellSurface(Test::createXdgToplevelSurface(surface.data()));
     auto waylandClient = Test::renderAndWaitForShown(surface.data(), QSize(100, 50), Qt::blue);
     QVERIFY(waylandClient);
     QVERIFY(waylandClient->isActive());
     QCOMPARE(waylandClient->layer(), NormalLayer);
     QCOMPARE(workspace()->stackingOrder().last(), waylandClient);
-    QCOMPARE(workspace()->xStackingOrder().last(), waylandClient);
+    QCOMPARE(workspace()->stackingOrder().last(), waylandClient);
     QCOMPARE(client->layer(), NormalLayer);
 
     // now activate fullscreen again
@@ -577,13 +577,13 @@ void X11ClientTest::testFullscreenLayerWithActiveWaylandWindow()
     QTRY_VERIFY(client->isActive());
     QCOMPARE(client->layer(), ActiveLayer);
     QCOMPARE(workspace()->stackingOrder().last(), client);
-    QCOMPARE(workspace()->xStackingOrder().last(), client);
+    QCOMPARE(workspace()->stackingOrder().last(), client);
 
     // activate wayland window again
     workspace()->activateClient(waylandClient);
     QTRY_VERIFY(waylandClient->isActive());
     QCOMPARE(workspace()->stackingOrder().last(), waylandClient);
-    QCOMPARE(workspace()->xStackingOrder().last(), waylandClient);
+    QCOMPARE(workspace()->stackingOrder().last(), waylandClient);
 
     // back to x window
     workspace()->activateClient(client);
@@ -596,13 +596,13 @@ void X11ClientTest::testFullscreenLayerWithActiveWaylandWindow()
     workspace()->slotWindowFullScreen();
     QVERIFY(client->isFullScreen());
     QCOMPARE(workspace()->stackingOrder().last(), client);
-    QCOMPARE(workspace()->xStackingOrder().last(), client);
+    QCOMPARE(workspace()->stackingOrder().last(), client);
 
     // activate wayland window again
     workspace()->activateClient(waylandClient);
     QTRY_VERIFY(waylandClient->isActive());
     QCOMPARE(workspace()->stackingOrder().last(), waylandClient);
-    QCOMPARE(workspace()->xStackingOrder().last(), waylandClient);
+    QCOMPARE(workspace()->stackingOrder().last(), waylandClient);
 
     // back to X11 window
     workspace()->activateClient(client);
@@ -619,13 +619,13 @@ void X11ClientTest::testFullscreenLayerWithActiveWaylandWindow()
     xcb_flush(c.data());
     QTRY_VERIFY(client->isFullScreen());
     QCOMPARE(workspace()->stackingOrder().last(), client);
-    QCOMPARE(workspace()->xStackingOrder().last(), client);
+    QCOMPARE(workspace()->stackingOrder().last(), client);
 
     // activate wayland window again
     workspace()->activateClient(waylandClient);
     QTRY_VERIFY(waylandClient->isActive());
     QCOMPARE(workspace()->stackingOrder().last(), waylandClient);
-    QCOMPARE(workspace()->xStackingOrder().last(), waylandClient);
+    QCOMPARE(workspace()->stackingOrder().last(), waylandClient);
     QCOMPARE(client->layer(), NormalLayer);
 
     // close the window
@@ -674,7 +674,7 @@ void X11ClientTest::testFocusInWithWaylandLastActiveWindow()
 
     // create Wayland window
     QScopedPointer<Surface> surface(Test::createSurface());
-    QScopedPointer<XdgShellSurface> shellSurface(Test::createXdgShellStableSurface(surface.data()));
+    QScopedPointer<Test::XdgToplevel> shellSurface(Test::createXdgToplevelSurface(surface.data()));
     auto waylandClient = Test::renderAndWaitForShown(surface.data(), QSize(100, 50), Qt::blue);
     QVERIFY(waylandClient);
     QVERIFY(waylandClient->isActive());
@@ -742,7 +742,7 @@ void X11ClientTest::testX11WindowId()
 
     // activate a wayland window
     QScopedPointer<Surface> surface(Test::createSurface());
-    QScopedPointer<XdgShellSurface> shellSurface(Test::createXdgShellStableSurface(surface.data()));
+    QScopedPointer<Test::XdgToplevel> shellSurface(Test::createXdgToplevelSurface(surface.data()));
     auto waylandClient = Test::renderAndWaitForShown(surface.data(), QSize(100, 50), Qt::blue);
     QVERIFY(waylandClient);
     QVERIFY(waylandClient->isActive());

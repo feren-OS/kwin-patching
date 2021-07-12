@@ -60,7 +60,7 @@ void TestDontCrashUseractionsMenu::initTestCase()
     QCOMPARE(screens()->count(), 2);
     QCOMPARE(screens()->geometry(0), QRect(0, 0, 1280, 1024));
     QCOMPARE(screens()->geometry(1), QRect(1280, 0, 1280, 1024));
-    waylandServer()->initWorkspace();
+    Test::initWaylandWorkspace();
 }
 
 void TestDontCrashUseractionsMenu::init()
@@ -80,7 +80,7 @@ void TestDontCrashUseractionsMenu::testShowHideShowUseractionsMenu()
 {
     // this test creates the condition of BUG 382063
     QScopedPointer<Surface> surface1(Test::createSurface());
-    QScopedPointer<XdgShellSurface> shellSurface1(Test::createXdgShellStableSurface(surface1.data()));
+    QScopedPointer<Test::XdgToplevel> shellSurface1(Test::createXdgToplevelSurface(surface1.data()));
     auto client = Test::renderAndWaitForShown(surface1.data(), QSize(100, 50), Qt::blue);
     QVERIFY(client);
 

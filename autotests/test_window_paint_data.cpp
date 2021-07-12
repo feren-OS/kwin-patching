@@ -8,7 +8,8 @@
 */
 
 #include <kwineffects.h>
-#include "../virtualdesktops.h"
+
+#include "virtualdesktops.h"
 
 #include <QVector2D>
 #include <QGraphicsRotation>
@@ -248,6 +249,9 @@ public:
         return false;
     }
     bool isOutline() const override {
+        return false;
+    }
+    bool isLockScreen() const override {
         return false;
     }
     pid_t pid() const override {

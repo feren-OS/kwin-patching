@@ -1,13 +1,11 @@
 add_subdirectory(helper)
 
 set(KWinIntegrationTestFramework_SOURCES
-    ../../cursor.cpp
+    ../../src/cursor.cpp
 
     generic_scene_opengl_test.cpp
     kwin_wayland_test.cpp
     test_helpers.cpp
-
-    ${kwin_XWAYLAND_SRCS}
 )
 ecm_add_qtwayland_client_protocol(KWinIntegrationTestFramework_SOURCES
     PROTOCOL ${WaylandProtocols_DATADIR}/unstable/input-method/input-method-unstable-v1.xml
@@ -25,11 +23,18 @@ ecm_add_qtwayland_client_protocol(KWinIntegrationTestFramework_SOURCES
     PROTOCOL ${WaylandProtocols_DATADIR}/stable/xdg-shell/xdg-shell.xml
     BASENAME xdg-shell
 )
+ecm_add_qtwayland_client_protocol(KWinIntegrationTestFramework_SOURCES
+    PROTOCOL ${WaylandProtocols_DATADIR}/unstable/xdg-decoration/xdg-decoration-unstable-v1.xml
+    BASENAME xdg-decoration-unstable-v1
+)
 add_library(KWinIntegrationTestFramework STATIC ${KWinIntegrationTestFramework_SOURCES})
 target_link_libraries(KWinIntegrationTestFramework
-    Qt5::Test
+    Qt::Test
     kwin
     Wayland::Client
+
+    # Own libraries
+    KWinXwaylandServerModule
 
     # Static plugins
     KWinQpaPlugin
@@ -44,12 +49,12 @@ function(integrationTest)
     set(multiValueArgs SRCS LIBS)
     cmake_parse_arguments(ARGS "${optionArgs}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
     add_executable(${ARGS_NAME} ${ARGS_SRCS})
-    target_link_libraries(${ARGS_NAME} KWinIntegrationTestFramework kwin Qt5::Test ${ARGS_LIBS})
+    target_link_libraries(${ARGS_NAME} KWinIntegrationTestFramework kwin Qt::Test ${ARGS_LIBS})
     add_test(NAME kwin-${ARGS_NAME} COMMAND dbus-run-session ${CMAKE_BINARY_DIR}/bin/${ARGS_NAME})
     if (${ARGS_WAYLAND_ONLY})
         add_executable(${ARGS_NAME}_waylandonly ${ARGS_SRCS} )
         set_target_properties(${ARGS_NAME}_waylandonly PROPERTIES COMPILE_DEFINITIONS "NO_XWAYLAND")
-        target_link_libraries(${ARGS_NAME}_waylandonly KWinIntegrationTestFramework kwin Qt5::Test ${ARGS_LIBS})
+        target_link_libraries(${ARGS_NAME}_waylandonly KWinIntegrationTestFramework kwin Qt::Test ${ARGS_LIBS})
         add_test(NAME kwin-${ARGS_NAME}-waylandonly COMMAND dbus-run-session ${CMAKE_BINARY_DIR}/bin/${ARGS_NAME}_waylandonly)
     endif()
 endfunction()
@@ -98,6 +103,9 @@ integrationTest(WAYLAND_ONLY NAME testActivation SRCS activation_test.cpp)
 integrationTest(WAYLAND_ONLY NAME testInputMethod SRCS inputmethod_test.cpp)
 integrationTest(WAYLAND_ONLY NAME testScreens SRCS screens_test.cpp)
 integrationTest(WAYLAND_ONLY NAME testOutputManagement SRCS outputmanagement_test.cpp)
+
+qt5_add_dbus_interfaces(DBUS_SRCS ${CMAKE_BINARY_DIR}/src/org.kde.kwin.VirtualKeyboard.xml)
+integrationTest(WAYLAND_ONLY NAME testVirtualKeyboardDBus SRCS test_virtualkeyboard_dbus.cpp ${DBUS_SRCS})
 
 if (KWIN_BUILD_CMS)
     integrationTest(WAYLAND_ONLY NAME testNightColor SRCS nightcolor_test.cpp LIBS KWinNightColorPlugin)

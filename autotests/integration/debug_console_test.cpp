@@ -60,7 +60,7 @@ void DebugConsoleTest::initTestCase()
     QCOMPARE(screens()->geometry(0), QRect(0, 0, 1280, 1024));
     QCOMPARE(screens()->geometry(1), QRect(1280, 0, 1280, 1024));
     setenv("QT_QPA_PLATFORM", "wayland", true);
-    waylandServer()->initWorkspace();
+    Test::initWaylandWorkspace();
 }
 
 void DebugConsoleTest::cleanup()
@@ -310,7 +310,7 @@ void DebugConsoleTest::testWaylandClient()
     using namespace KWayland::Client;
     QScopedPointer<Surface> surface(Test::createSurface());
     QVERIFY(surface->isValid());
-    QScopedPointer<XdgShellSurface> shellSurface(Test::createXdgShellStableSurface(surface.data()));
+    QScopedPointer<Test::XdgToplevel> shellSurface(Test::createXdgToplevelSurface(surface.data()));
     QVERIFY(!shellSurface.isNull());
     Test::render(surface.data(), QSize(10, 10), Qt::red);
 

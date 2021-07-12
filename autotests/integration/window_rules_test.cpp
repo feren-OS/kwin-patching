@@ -54,7 +54,7 @@ void WindowRuleTest::initTestCase()
     QCOMPARE(screens()->geometry(0), QRect(0, 0, 1280, 1024));
     QCOMPARE(screens()->geometry(1), QRect(1280, 0, 1280, 1024));
     setenv("QT_QPA_PLATFORM", "wayland", true);
-    waylandServer()->initWorkspace();
+    Test::initWaylandWorkspace();
 }
 
 void WindowRuleTest::init()
@@ -137,11 +137,7 @@ void WindowRuleTest::testApplyInitialMaximizeVert()
     QVERIFY(!client->readyForPainting());
     QMetaObject::invokeMethod(client, "setReadyForPainting");
     QVERIFY(client->readyForPainting());
-    QVERIFY(!client->surface());
-    QSignalSpy surfaceChangedSpy(client, &Toplevel::surfaceChanged);
-    QVERIFY(surfaceChangedSpy.isValid());
-    QVERIFY(surfaceChangedSpy.wait());
-    QVERIFY(client->surface());
+    QVERIFY(Test::waitForWaylandSurface(client));
     QCOMPARE(client->maximizeMode(), MaximizeVertical);
 
     // destroy window again
@@ -208,11 +204,7 @@ void WindowRuleTest::testWindowClassChange()
     QVERIFY(!client->readyForPainting());
     QMetaObject::invokeMethod(client, "setReadyForPainting");
     QVERIFY(client->readyForPainting());
-    QVERIFY(!client->surface());
-    QSignalSpy surfaceChangedSpy(client, &Toplevel::surfaceChanged);
-    QVERIFY(surfaceChangedSpy.isValid());
-    QVERIFY(surfaceChangedSpy.wait());
-    QVERIFY(client->surface());
+    QVERIFY(Test::waitForWaylandSurface(client));
     QCOMPARE(client->keepAbove(), false);
 
     // now change class

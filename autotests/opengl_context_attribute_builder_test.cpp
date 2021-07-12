@@ -6,14 +6,14 @@
 
     SPDX-License-Identifier: GPL-2.0-or-later
 */
-#include "../abstract_opengl_context_attribute_builder.h"
-#include "../egl_context_attribute_builder.h"
+#include "abstract_opengl_context_attribute_builder.h"
+#include "egl_context_attribute_builder.h"
 #include <QtTest>
 #include <epoxy/egl.h>
 
 #include <kwinconfig.h>
 #if HAVE_EPOXY_GLX
-#include "../plugins/platforms/x11/standalone/glx_context_attribute_builder.h"
+#include "../src/plugins/platforms/x11/standalone/glx_context_attribute_builder.h"
 #include <epoxy/glx.h>
 
 #ifndef GLX_GENERATE_RESET_ON_VIDEO_MEMORY_PURGE_NV

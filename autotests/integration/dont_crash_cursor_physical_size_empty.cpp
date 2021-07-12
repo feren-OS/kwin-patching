@@ -59,6 +59,7 @@ void DontCrashCursorPhysicalSizeEmpty::initTestCase()
     QVERIFY(applicationStartedSpy.isValid());
     kwinApp()->platform()->setInitialWindowSize(QSize(1280, 1024));
     QVERIFY(waylandServer()->init(s_socketName));
+    QMetaObject::invokeMethod(kwinApp()->platform(), "setVirtualOutputs", Qt::DirectConnection, Q_ARG(int, 2));
 
     if (!QStandardPaths::locateAll(QStandardPaths::GenericDataLocation, QStringLiteral("icons/DMZ-White/index.theme")).isEmpty()) {
         qputenv("XCURSOR_THEME", QByteArrayLiteral("DMZ-White"));
@@ -70,6 +71,7 @@ void DontCrashCursorPhysicalSizeEmpty::initTestCase()
 
     kwinApp()->start();
     QVERIFY(applicationStartedSpy.wait());
+    Test::initWaylandWorkspace();
 }
 
 void DontCrashCursorPhysicalSizeEmpty::testMoveCursorOverDeco()
@@ -79,7 +81,7 @@ void DontCrashCursorPhysicalSizeEmpty::testMoveCursorOverDeco()
     // see BUG: 390314
     QScopedPointer<Surface> surface(Test::createSurface());
     Test::waylandServerSideDecoration()->create(surface.data(), surface.data());
-    QScopedPointer<XdgShellSurface> shellSurface(Test::createXdgShellStableSurface(surface.data()));
+    QScopedPointer<Test::XdgToplevel> shellSurface(Test::createXdgToplevelSurface(surface.data()));
 
     auto c = Test::renderAndWaitForShown(surface.data(), QSize(100, 50), Qt::blue);
     QVERIFY(c);

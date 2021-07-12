@@ -7,15 +7,16 @@
     SPDX-License-Identifier: GPL-2.0-or-later
 */
 #include "kwin_wayland_test.h"
-#include "../../platform.h"
-#include "../../pluginmanager.h"
-#include "../../composite.h"
-#include "../../effects.h"
-#include "../../wayland_server.h"
-#include "../../workspace.h"
-#include "../../xcbutils.h"
-#include "../../xwl/xwayland.h"
-#include "../../inputmethod.h"
+
+#include "composite.h"
+#include "effects.h"
+#include "inputmethod.h"
+#include "platform.h"
+#include "pluginmanager.h"
+#include "wayland_server.h"
+#include "workspace.h"
+#include "xcbutils.h"
+#include "xwl/xwayland.h"
 
 #include <KPluginMetaData>
 
@@ -50,6 +51,7 @@ WaylandTestApplication::WaylandTestApplication(OperationMode mode, int &argc, ch
     setUseKActivities(false);
 #endif
     qputenv("KWIN_COMPOSE", QByteArrayLiteral("Q"));
+    qputenv("XDG_CURRENT_DESKTOP", QByteArrayLiteral("KDE"));
     qunsetenv("XKB_DEFAULT_RULES");
     qunsetenv("XKB_DEFAULT_MODEL");
     qunsetenv("XKB_DEFAULT_LAYOUT");
@@ -73,13 +75,11 @@ WaylandTestApplication::WaylandTestApplication(OperationMode mode, int &argc, ch
 WaylandTestApplication::~WaylandTestApplication()
 {
     setTerminating();
-    kwinApp()->platform()->setOutputsEnabled(false);
     // need to unload all effects prior to destroying X connection as they might do X calls
     // also before destroy Workspace, as effects might call into Workspace
     if (effects) {
         static_cast<EffectsHandlerImpl*>(effects)->unloadAllEffects();
     }
-    destroyPlugins();
     delete m_xwayland;
     m_xwayland = nullptr;
     destroyWorkspace();
@@ -89,7 +89,6 @@ WaylandTestApplication::~WaylandTestApplication()
     }
     waylandServer()->terminateClientConnections();
     destroyCompositor();
-    destroyColorManager();
 }
 
 void WaylandTestApplication::performStartup()
@@ -97,59 +96,29 @@ void WaylandTestApplication::performStartup()
     if (!m_inputMethodServerToStart.isEmpty()) {
         InputMethod::create();
         if (m_inputMethodServerToStart != QStringLiteral("internal")) {
-            int socket = dup(waylandServer()->createInputMethodConnection());
-            if (socket >= 0) {
-                QProcessEnvironment environment = processStartupEnvironment();
-                environment.insert(QStringLiteral("WAYLAND_SOCKET"), QByteArray::number(socket));
-                environment.insert(QStringLiteral("QT_QPA_PLATFORM"), QStringLiteral("wayland"));
-                environment.remove("DISPLAY");
-                environment.remove("WAYLAND_DISPLAY");
-                environment.remove("XAUTHORITY");
-                QProcess *p = new Process(this);
-                p->setProcessChannelMode(QProcess::ForwardedErrorChannel);
-                connect(p, qOverload<int, QProcess::ExitStatus>(&QProcess::finished), this,
-                    [p] {
-                        if (waylandServer()) {
-                            waylandServer()->destroyInputMethodConnection();
-                        }
-                        p->deleteLater();
-                    }
-                );
-                p->setProcessEnvironment(environment);
-                p->setProgram(m_inputMethodServerToStart);
-            //  p->setArguments(arguments);
-                p->start();
-                connect(waylandServer(), &WaylandServer::terminatingInternalClientConnection, p, [p] {
-                    p->kill();
-                    p->waitForFinished();
-                });
-            }
+            InputMethod::self()->setInputMethodCommand(m_inputMethodServerToStart);
+            InputMethod::self()->setEnabled(true);
         }
     }
 
     // first load options - done internally by a different thread
     createOptions();
-    createSession();
+    if (!platform()->initialize()) {
+        std::exit(1);
+    }
+    waylandServer()->initPlatform();
     createColorManager();
     waylandServer()->createInternalConnection();
 
     // try creating the Wayland Backend
     createInput();
-    createBackend();
     createPlugins();
-}
 
-void WaylandTestApplication::createBackend()
-{
-    Platform *platform = kwinApp()->platform();
-    connect(platform, &Platform::screensQueried, this, &WaylandTestApplication::continueStartupWithScreens);
-    connect(platform, &Platform::initFailed, this,
-        [] () {
-            std::cerr <<  "FATAL ERROR: backend failed to initialize, exiting now" << std::endl;
-            ::exit(1);
-        }
-    );
-    platform->init();
+    if (!platform()->enabledOutputs().isEmpty()) {
+        continueStartupWithScreens();
+    } else {
+        connect(platform(), &Platform::screensQueried, this, &WaylandTestApplication::continueStartupWithScreens);
+    }
 }
 
 void WaylandTestApplication::continueStartupWithScreens()

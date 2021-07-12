@@ -63,7 +63,7 @@ void DontCrashNoBorder::initTestCase()
     QCOMPARE(screens()->geometry(0), QRect(0, 0, 1280, 1024));
     QCOMPARE(screens()->geometry(1), QRect(1280, 0, 1280, 1024));
     setenv("QT_QPA_PLATFORM", "wayland", true);
-    waylandServer()->initWorkspace();
+    Test::initWaylandWorkspace();
 
     auto scene = KWin::Compositor::self()->scene();
     QVERIFY(scene);
@@ -90,7 +90,7 @@ void DontCrashNoBorder::testCreateWindow()
 
     QScopedPointer<Surface> surface(Test::createSurface());
     QVERIFY(!surface.isNull());
-    QScopedPointer<XdgShellSurface> shellSurface(Test::createXdgShellStableSurface(surface.data()));
+    QScopedPointer<Test::XdgToplevel> shellSurface(Test::createXdgToplevelSurface(surface.data()));
     QVERIFY(shellSurface);
     QScopedPointer<ServerSideDecoration> deco(Test::waylandServerSideDecoration()->create(surface.data()));
     QSignalSpy decoSpy(deco.data(), &ServerSideDecoration::modeChanged);

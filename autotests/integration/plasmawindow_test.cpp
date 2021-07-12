@@ -70,7 +70,7 @@ void PlasmaWindowTest::initTestCase()
     QCOMPARE(screens()->geometry(1), QRect(1280, 0, 1280, 1024));
     setenv("QT_QPA_PLATFORM", "wayland", true);
     setenv("QMLSCENE_DEVICE", "softwarecontext", true);
-    waylandServer()->initWorkspace();
+    Test::initWaylandWorkspace();
 }
 
 void PlasmaWindowTest::init()
@@ -133,11 +133,8 @@ void PlasmaWindowTest::testCreateDestroyX11PlasmaWindow()
     if (!client->surface()) {
         // we don't have a surface yet, so focused keyboard surface if set is not ours
         QVERIFY(!waylandServer()->seat()->focusedKeyboardSurface());
-        QSignalSpy surfaceChangedSpy(client, &Toplevel::surfaceChanged);
-        QVERIFY(surfaceChangedSpy.isValid());
-        QVERIFY(surfaceChangedSpy.wait());
+        QVERIFY(Test::waitForWaylandSurface(client));
     }
-    QVERIFY(client->surface());
     QCOMPARE(waylandServer()->seat()->focusedKeyboardSurface(), client->surface());
 
     // now that should also give it to us on client side
@@ -231,19 +228,21 @@ void PlasmaWindowTest::testPopupWindowNoPlasmaWindow()
 
     // first create the parent window
     QScopedPointer<Surface> parentSurface(Test::createSurface());
-    QScopedPointer<XdgShellSurface> parentShellSurface(Test::createXdgShellStableSurface(parentSurface.data()));
+    QScopedPointer<Test::XdgToplevel> parentShellSurface(Test::createXdgToplevelSurface(parentSurface.data()));
     AbstractClient *parentClient = Test::renderAndWaitForShown(parentSurface.data(), QSize(100, 50), Qt::blue);
     QVERIFY(parentClient);
     QVERIFY(plasmaWindowCreatedSpy.wait());
     QCOMPARE(plasmaWindowCreatedSpy.count(), 1);
 
     // now let's create a popup window for it
-    XdgPositioner positioner(QSize(10, 10), QRect(0, 0, 10, 10));
-    positioner.setAnchorEdge(Qt::BottomEdge | Qt::RightEdge);
-    positioner.setGravity(Qt::BottomEdge | Qt::RightEdge);
+    QScopedPointer<Test::XdgPositioner> positioner(Test::createXdgPositioner());
+    positioner->set_size(10, 10);
+    positioner->set_anchor_rect(0, 0, 10, 10);
+    positioner->set_anchor(Test::XdgPositioner::anchor_bottom_right);
+    positioner->set_gravity(Test::XdgPositioner::gravity_bottom_right);
     QScopedPointer<Surface> popupSurface(Test::createSurface());
-    QScopedPointer<XdgShellPopup> popupShellSurface(Test::createXdgShellStablePopup(popupSurface.data(), parentShellSurface.data(), positioner));
-    AbstractClient *popupClient = Test::renderAndWaitForShown(popupSurface.data(), positioner.initialSize(), Qt::blue);
+    QScopedPointer<Test::XdgPopup> popupShellSurface(Test::createXdgPopupSurface(popupSurface.data(), parentShellSurface->xdgSurface(), positioner.data()));
+    AbstractClient *popupClient = Test::renderAndWaitForShown(popupSurface.data(), QSize(10, 10), Qt::blue);
     QVERIFY(popupClient);
     QVERIFY(!plasmaWindowCreatedSpy.wait(100));
     QCOMPARE(plasmaWindowCreatedSpy.count(), 1);
@@ -296,7 +295,7 @@ void PlasmaWindowTest::testDestroyedButNotUnmapped()
 
     // first create the parent window
     QScopedPointer<Surface> parentSurface(Test::createSurface());
-    QScopedPointer<XdgShellSurface> parentShellSurface(Test::createXdgShellStableSurface(parentSurface.data()));
+    QScopedPointer<Test::XdgToplevel> parentShellSurface(Test::createXdgToplevelSurface(parentSurface.data()));
     // map that window
     Test::render(parentSurface.data(), QSize(100, 50), Qt::blue);
     // this should create a plasma window

@@ -25,7 +25,6 @@
 #include <KWayland/Client/outputdevice.h>
 #include <KWayland/Client/server_decoration.h>
 #include <KWayland/Client/surface.h>
-#include <KWayland/Client/xdgshell.h>
 
 #include <KWaylandServer/display.h>
 
@@ -43,6 +42,7 @@ private Q_SLOTS:
     void cleanup();
 
     void testOutputDeviceDisabled();
+    void testOutputDeviceRemoved();
 };
 
 void TestOutputManagement::initTestCase()
@@ -50,6 +50,7 @@ void TestOutputManagement::initTestCase()
     qRegisterMetaType<KWin::Deleted*>();
     qRegisterMetaType<KWin::AbstractClient*>();
     qRegisterMetaType<KWin::AbstractOutput*>();
+    qRegisterMetaType<AbstractOutput *>();
     qRegisterMetaType<KWin::AbstractOutput*>("AbstractOutput *");
     qRegisterMetaType<KWayland::Client::Output*>();
     qRegisterMetaType<KWayland::Client::OutputDevice::Enablement>();
@@ -67,7 +68,7 @@ void TestOutputManagement::initTestCase()
     QCOMPARE(screens()->count(), 2);
     QCOMPARE(screens()->geometry(0), QRect(0, 0, 1280, 1024));
     QCOMPARE(screens()->geometry(1), QRect(1280, 0, 1280, 1024));
-    waylandServer()->initWorkspace();
+    Test::initWaylandWorkspace();
 }
 
 void TestOutputManagement::init()
@@ -91,7 +92,7 @@ void TestOutputManagement::testOutputDeviceDisabled()
     // when disabling and enabling virtual OutputDevice
 
     QScopedPointer<Surface> surface(Test::createSurface());
-    QScopedPointer<XdgShellSurface> shellSurface(Test::createXdgShellStableSurface(surface.data()));
+    QScopedPointer<Test::XdgToplevel> shellSurface(Test::createXdgToplevelSurface(surface.data()));
     auto size = QSize(200,200);
 
     QSignalSpy outputEnteredSpy(surface.data(), &Surface::outputEntered);
@@ -170,6 +171,69 @@ void TestOutputManagement::testOutputDeviceDisabled()
     QCOMPARE(modesChangedSpy.count(), 0);
     QCOMPARE(outputEnabledSpy.count(), 1);
     QCOMPARE(outputDisabledSpy.count(), 0);
+}
+
+void TestOutputManagement::testOutputDeviceRemoved()
+{
+    // This tests checks that OutputConfiguration::apply aka Platform::requestOutputsChange works as expected
+    // when removing a virtual OutputDevice
+
+    QScopedPointer<Surface> surface(Test::createSurface());
+    QScopedPointer<Test::XdgToplevel> shellSurface(Test::createXdgToplevelSurface(surface.data()));
+    auto size = QSize(200,200);
+
+    QSignalSpy outputEnteredSpy(surface.data(), &Surface::outputEntered);
+    QSignalSpy outputLeftSpy(surface.data(), &Surface::outputLeft);
+
+    QSignalSpy outputEnabledSpy(kwinApp()->platform(), &Platform::outputEnabled);
+    QSignalSpy outputDisabledSpy(kwinApp()->platform(), &Platform::outputDisabled);
+    QSignalSpy outputRemovedSpy(kwinApp()->platform(), &Platform::outputRemoved);
+
+    auto c = Test::renderAndWaitForShown(surface.data(), size, Qt::blue);
+    //move to be in the first screen
+    c->move(QPoint(100,100));
+    //we don't don't know where the compositor first placed this window,
+    //this might fire, it might not
+    outputEnteredSpy.wait(5);
+    outputEnteredSpy.clear();
+    QCOMPARE(waylandServer()->display()->outputs().count(), 2);
+
+    QCOMPARE(surface->outputs().count(), 1);
+    Output *firstOutput = surface->outputs().first();
+    QCOMPARE(firstOutput->globalPosition(), QPoint(0,0));
+    QSignalSpy modesChangedSpy(firstOutput, &Output::modeChanged);
+
+    QSignalSpy screenChangedSpy(screens(), &KWin::Screens::changed);
+
+    QCOMPARE(Test::waylandOutputDevices().count(), 2);
+
+    OutputDevice *device = Test::waylandOutputDevices().first();
+    QCOMPARE(device->enabled(), OutputDevice::Enablement::Enabled);
+
+    QSignalSpy outputDeviceEnabledChangedSpy(device, &OutputDevice::enabledChanged);
+
+    AbstractOutput *output = kwinApp()->platform()->outputs().first();
+    // Removes an output
+    QMetaObject::invokeMethod(kwinApp()->platform(), "removeOutput", Qt::DirectConnection, Q_ARG(AbstractOutput *, output));
+
+    // Let the new state propagate
+    QVERIFY(outputEnteredSpy.wait());
+
+    QCOMPARE(waylandServer()->display()->outputs().count(), 1);
+    QCOMPARE(waylandServer()->display()->outputDevices().count(), 1);
+
+    QCOMPARE(Test::waylandOutputDevices().count(), 1);
+    QCOMPARE(outputDeviceEnabledChangedSpy.count(), 1);
+    QCOMPARE(device->enabled(), OutputDevice::Enablement::Disabled);
+    QCOMPARE(outputLeftSpy.count(), 1);
+    QCOMPARE(outputEnteredSpy.count(), 1); // surface moved to the other screen
+    QCOMPARE(surface->outputs().count(), 1);
+    QCOMPARE(screens()->count(), 1);
+    QCOMPARE(screenChangedSpy.count(), 3);
+    QCOMPARE(modesChangedSpy.count(), 0);
+    QCOMPARE(outputEnabledSpy.count(), 0);
+    QCOMPARE(outputDisabledSpy.count(), 1);
+    QCOMPARE(outputRemovedSpy.count(), 1);
 }
 
 WAYLANDTEST_MAIN(TestOutputManagement)

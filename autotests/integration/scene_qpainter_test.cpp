@@ -147,7 +147,7 @@ void SceneQPainterTest::testWindow()
     QVERIFY(Test::setupWaylandConnection(Test::AdditionalWaylandInterface::Seat));
     QVERIFY(Test::waitForWaylandPointer());
     QScopedPointer<Surface> s(Test::createSurface());
-    QScopedPointer<XdgShellSurface> ss(Test::createXdgShellStableSurface(s.data()));
+    QScopedPointer<Test::XdgToplevel> ss(Test::createXdgToplevelSurface(s.data()));
     QScopedPointer<Pointer> p(Test::waylandSeat()->createPointer());
 
     auto scene = KWin::Compositor::self()->scene();
@@ -191,7 +191,7 @@ void SceneQPainterTest::testWindowScaled()
     QVERIFY(Test::setupWaylandConnection(Test::AdditionalWaylandInterface::Seat));
     QVERIFY(Test::waitForWaylandPointer());
     QScopedPointer<Surface> s(Test::createSurface());
-    QScopedPointer<XdgShellSurface> ss(Test::createXdgShellStableSurface(s.data()));
+    QScopedPointer<Test::XdgToplevel> ss(Test::createXdgToplevelSurface(s.data()));
     QScopedPointer<Pointer> p(Test::waylandSeat()->createPointer());
     QSignalSpy pointerEnteredSpy(p.data(), &Pointer::entered);
     QVERIFY(pointerEnteredSpy.isValid());
@@ -242,7 +242,7 @@ void SceneQPainterTest::testCompositorRestart()
     using namespace KWayland::Client;
     QVERIFY(Test::setupWaylandConnection());
     QScopedPointer<Surface> s(Test::createSurface());
-    QScopedPointer<XdgShellSurface> ss(Test::createXdgShellStableSurface(s.data()));
+    QScopedPointer<Test::XdgToplevel> ss(Test::createXdgToplevelSurface(s.data()));
     QVERIFY(Test::renderAndWaitForShown(s.data(), QSize(200, 300), Qt::blue));
 
     // now let's try to reinitialize the compositing scene
@@ -322,13 +322,7 @@ void SceneQPainterTest::testX11Window()
     QVERIFY(client);
     QCOMPARE(client->window(), w);
     QCOMPARE(client->clientSize(), QSize(100, 200));
-    if (!client->surface()) {
-        // wait for surface
-        QSignalSpy surfaceChangedSpy(client, &Toplevel::surfaceChanged);
-        QVERIFY(surfaceChangedSpy.isValid());
-        QVERIFY(surfaceChangedSpy.wait());
-    }
-    QVERIFY(client->surface());
+    QVERIFY(Test::waitForWaylandSurface(client));
     QTRY_VERIFY(client->surface()->buffer());
     QTRY_COMPARE(client->surface()->buffer()->data().size(), client->size());
     QImage compareImage(client->clientSize(), QImage::Format_RGB32);

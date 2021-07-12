@@ -32,7 +32,6 @@
 #include <KWayland/Client/compositor.h>
 #include <KWayland/Client/output.h>
 #include <KWayland/Client/surface.h>
-#include <KWayland/Client/xdgshell.h>
 #include <KWayland/Client/textinput.h>
 #include <KWayland/Client/seat.h>
 
@@ -57,6 +56,8 @@ private Q_SLOTS:
 
 void InputMethodTest::initTestCase()
 {
+    QDBusConnection::sessionBus().registerService(QStringLiteral("org.kde.kwin.testvirtualkeyboard"));
+
     qRegisterMetaType<KWin::Deleted *>();
     qRegisterMetaType<KWin::AbstractClient *>();
     qRegisterMetaType<KWayland::Client::Output *>();
@@ -67,13 +68,13 @@ void InputMethodTest::initTestCase()
     QVERIFY(waylandServer()->init(s_socketName));
     QMetaObject::invokeMethod(kwinApp()->platform(), "setVirtualOutputs", Qt::DirectConnection, Q_ARG(int, 2));
 
-    static_cast<WaylandTestApplication *>(kwinApp())->setInputMethodServerToStart("internal");
+    static_cast<WaylandTestApplication *>(kwinApp())->setInputMethodServerToStart("qml " + QFINDTESTDATA("emptywindow.qml"));
     kwinApp()->start();
     QVERIFY(applicationStartedSpy.wait());
     QCOMPARE(screens()->count(), 2);
     QCOMPARE(screens()->geometry(0), QRect(0, 0, 1280, 1024));
     QCOMPARE(screens()->geometry(1), QRect(1280, 0, 1280, 1024));
-    waylandServer()->initWorkspace();
+    Test::initWaylandWorkspace();
 
 }
 
@@ -88,11 +89,7 @@ void InputMethodTest::init()
     screens()->setCurrent(0);
     KWin::Cursors::self()->mouse()->setPos(QPoint(512, 512));
 
-    const QDBusMessage message = QDBusMessage::createMethodCall(QStringLiteral("org.kde.kwin.testvirtualkeyboard"),
-                                                                QStringLiteral("/VirtualKeyboard"),
-                                                                QStringLiteral("org.kde.kwin.VirtualKeyboard"),
-                                                                "enable");
-    QDBusConnection::sessionBus().call(message);
+    InputMethod::self()->setEnabled(true);
 }
 
 void InputMethodTest::cleanup()
@@ -108,21 +105,21 @@ void InputMethodTest::testOpenClose()
 
     // Create an xdg_toplevel surface and wait for the compositor to catch up.
     QScopedPointer<Surface> surface(Test::createSurface());
-    QScopedPointer<XdgShellSurface> shellSurface(Test::createXdgShellStableSurface(surface.data()));
+    QScopedPointer<Test::XdgToplevel> shellSurface(Test::createXdgToplevelSurface(surface.data()));
     AbstractClient *client = Test::renderAndWaitForShown(surface.data(), QSize(1280, 1024), Qt::red);
     QVERIFY(client);
     QVERIFY(client->isActive());
     QCOMPARE(client->frameGeometry().size(), QSize(1280, 1024));
     QSignalSpy frameGeometryChangedSpy(client, &AbstractClient::frameGeometryChanged);
     QVERIFY(frameGeometryChangedSpy.isValid());
-    QSignalSpy configureRequestedSpy(shellSurface.data(), &XdgShellSurface::configureRequested);
-    QVERIFY(configureRequestedSpy.isValid());
+    QSignalSpy toplevelConfigureRequestedSpy(shellSurface.data(), &Test::XdgToplevel::configureRequested);
+    QSignalSpy surfaceConfigureRequestedSpy(shellSurface->xdgSurface(), &Test::XdgSurface::configureRequested);
 
     QScopedPointer<TextInput> textInput(Test::waylandTextInputManager()->createTextInput(Test::waylandSeat()));
 
     QVERIFY(!textInput.isNull());
     textInput->enable(surface.data());
-    QVERIFY(configureRequestedSpy.wait());
+    QVERIFY(surfaceConfigureRequestedSpy.wait());
 
     // Show the keyboard
     textInput->showInputPanel();
@@ -133,9 +130,9 @@ void InputMethodTest::testOpenClose()
     QVERIFY(keyboardClient->isInputMethod());
 
     // Do the actual resize
-    QVERIFY(configureRequestedSpy.wait());
+    QVERIFY(surfaceConfigureRequestedSpy.wait());
 
-    Test::render(surface.data(), configureRequestedSpy.last().first().value<QSize>(), Qt::red);
+    Test::render(surface.data(), toplevelConfigureRequestedSpy.last().first().value<QSize>(), Qt::red);
     QVERIFY(frameGeometryChangedSpy.wait());
 
     QCOMPARE(client->frameGeometry().height(), 1024 - keyboardClient->inputGeometry().height() + 1);
@@ -143,8 +140,8 @@ void InputMethodTest::testOpenClose()
     // Hide the keyboard
     textInput->hideInputPanel();
 
-    QVERIFY(configureRequestedSpy.wait());
-    Test::render(surface.data(), configureRequestedSpy.last().first().value<QSize>(), Qt::red);
+    QVERIFY(surfaceConfigureRequestedSpy.wait());
+    Test::render(surface.data(), toplevelConfigureRequestedSpy.last().first().value<QSize>(), Qt::red);
     QVERIFY(frameGeometryChangedSpy.wait());
 
     QCOMPARE(client->frameGeometry().height(), 1024);
@@ -156,13 +153,9 @@ void InputMethodTest::testOpenClose()
 
 void InputMethodTest::testEnableDisableV3()
 {
-    QSignalSpy clientAddedSpy(workspace(), &Workspace::clientAdded);
-    QSignalSpy clientRemovedSpy(workspace(), &Workspace::clientRemoved);
-    QVERIFY(clientAddedSpy.isValid());
-
     // Create an xdg_toplevel surface and wait for the compositor to catch up.
     QScopedPointer<Surface> surface(Test::createSurface());
-    QScopedPointer<XdgShellSurface> shellSurface(Test::createXdgShellStableSurface(surface.data()));
+    QScopedPointer<Test::XdgToplevel> shellSurface(Test::createXdgToplevelSurface(surface.data()));
     AbstractClient *client = Test::renderAndWaitForShown(surface.data(), QSize(1280, 1024), Qt::red);
     QVERIFY(client);
     QVERIFY(client->isActive());
@@ -171,21 +164,21 @@ void InputMethodTest::testEnableDisableV3()
     Test::TextInputV3 *textInputV3 = new Test::TextInputV3();
     textInputV3->init(Test::waylandTextInputManagerV3()->get_text_input(*(Test::waylandSeat())));
     textInputV3->enable();
+
+    QSignalSpy inputMethodActiveSpy(InputMethod::self(), &InputMethod::activeChanged);
     // just enabling the text-input should not show it but rather on commit
-    QVERIFY(!clientAddedSpy.wait(100));
-
+    QVERIFY(!InputMethod::self()->isActive());
     textInputV3->commit();
-
-    QVERIFY(clientAddedSpy.wait());
-    AbstractClient *keyboardClient = clientAddedSpy.last().first().value<AbstractClient *>();
-    QVERIFY(keyboardClient);
-    QVERIFY(keyboardClient->isInputMethod());
+    QVERIFY(inputMethodActiveSpy.count() || inputMethodActiveSpy.wait());
+    QVERIFY(InputMethod::self()->isActive());
 
     // disable text input and ensure that it is not hiding input panel without commit
+    inputMethodActiveSpy.clear();
+    QVERIFY(InputMethod::self()->isActive());
     textInputV3->disable();
-    QVERIFY(!clientRemovedSpy.wait(100));
     textInputV3->commit();
-    QVERIFY(clientRemovedSpy.wait());
+    QVERIFY(inputMethodActiveSpy.count() || inputMethodActiveSpy.wait());
+    QVERIFY(!InputMethod::self()->isActive());
 }
 
 WAYLANDTEST_MAIN(InputMethodTest)

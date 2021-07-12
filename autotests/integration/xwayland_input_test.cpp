@@ -54,7 +54,7 @@ void XWaylandInputTest::initTestCase()
     QCOMPARE(screens()->geometry(0), QRect(0, 0, 1280, 1024));
     QCOMPARE(screens()->geometry(1), QRect(1280, 0, 1280, 1024));
     setenv("QT_QPA_PLATFORM", "wayland", true);
-    waylandServer()->initWorkspace();
+    Test::initWaylandWorkspace();
 }
 
 void XWaylandInputTest::init()
@@ -168,20 +168,16 @@ void XWaylandInputTest::testPointerEnterLeaveSsd()
     QVERIFY(!client->hasStrut());
     QVERIFY(!client->isHiddenInternal());
     QVERIFY(!client->readyForPainting());
+
     QMetaObject::invokeMethod(client, "setReadyForPainting");
     QVERIFY(client->readyForPainting());
-    QVERIFY(!client->surface());
-    QSignalSpy surfaceChangedSpy(client, &Toplevel::surfaceChanged);
-    QVERIFY(surfaceChangedSpy.isValid());
-    QVERIFY(surfaceChangedSpy.wait());
-    QVERIFY(client->surface());
+    QVERIFY(Test::waitForWaylandSurface(client));
 
     // move pointer into the window, should trigger an enter
     QVERIFY(!client->frameGeometry().contains(Cursors::self()->mouse()->pos()));
     QVERIFY(enteredSpy.isEmpty());
     Cursors::self()->mouse()->setPos(client->frameGeometry().center());
     QCOMPARE(waylandServer()->seat()->focusedPointerSurface(), client->surface());
-    QVERIFY(waylandServer()->seat()->focusedPointer());
     QVERIFY(enteredSpy.wait());
     QCOMPARE(enteredSpy.last().first(), client->frameGeometry().center() - client->clientPos());
 
@@ -266,18 +262,13 @@ void XWaylandInputTest::testPointerEventLeaveCsd()
 
     QMetaObject::invokeMethod(client, "setReadyForPainting");
     QVERIFY(client->readyForPainting());
-    QVERIFY(!client->surface());
-    QSignalSpy surfaceChangedSpy(client, &Toplevel::surfaceChanged);
-    QVERIFY(surfaceChangedSpy.isValid());
-    QVERIFY(surfaceChangedSpy.wait());
-    QVERIFY(client->surface());
+    QVERIFY(Test::waitForWaylandSurface(client));
 
     // Move pointer into the window, should trigger an enter.
     QVERIFY(!client->frameGeometry().contains(Cursors::self()->mouse()->pos()));
     QVERIFY(enteredSpy.isEmpty());
     Cursors::self()->mouse()->setPos(client->frameGeometry().center());
     QCOMPARE(waylandServer()->seat()->focusedPointerSurface(), client->surface());
-    QVERIFY(waylandServer()->seat()->focusedPointer());
     QVERIFY(enteredSpy.wait());
     QCOMPARE(enteredSpy.last().first(), QPoint(59, 104));
 
