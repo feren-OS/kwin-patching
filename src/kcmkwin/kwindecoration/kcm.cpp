@@ -133,6 +133,15 @@ void KCMKWinDecoration::save()
                                                       QStringLiteral("org.kde.KWin"),
                                                       QStringLiteral("reloadConfig"));
     QDBusConnection::sessionBus().send(message);
+    
+    const QModelIndex proxyIndex = m_proxyThemesModel->index(theme(), 0);
+    if (proxyIndex.isValid()) {
+        if (m_proxyThemesModel->data(proxyIndex, KDecoration2::Configuration::DecorationsModel::PluginNameRole).toString() == "org.kde.kwin.aurorae") {
+            std::system("/usr/bin/feren-theme-tool-plasma disableshadowfix");
+        } else {
+            std::system("/usr/bin/feren-theme-tool-plasma shadowfix");
+        }
+    }
 }
 
 void KCMKWinDecoration::defaults()
